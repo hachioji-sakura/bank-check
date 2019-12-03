@@ -1,0 +1,42 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="ja">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<title></title>
+<script type="text/javascript">
+<!--
+function blankCheck() {
+    if (document.FORM1.y.value == '') {
+    	alert ("年を指定して下さい。");
+        return false;
+    }
+    if (document.FORM1.m.value == '') {
+    	alert ("月を指定して下さい。");
+        return false;
+    }
+    if (document.FORM1.m.value <1 || document.FORM1.m.value >12) {
+    	alert ("月を正しく指定して下さい。");
+        return false;
+    }
+    if (document.FORM1.upfile.value == '') {
+    	alert ("ファイルを指定して下さい。");
+        return false;
+    }
+    return true;
+}
+// -->
+</script>
+</head>
+<body>
+<h3>請求振込管理システム</h3>
+<h3>銀行ＣＳＶファイルアップロード</h3>
+<br>
+１ヶ月分のＣＳＶデータファイルを指定してください。<br><br>
+<form action="./upload.cgi" name=FORM1 method="post" enctype="multipart/form-data" onsubmit="return blankCheck()">
+<input type=text name="y" size="4" maxlength="4">年<input type=text name="m" size="2" maxlength="2">月ゆうちょ銀行明細書<br><br>
+<input type=file name="upfile" size="60"><br><br>
+<input type=submit name=sub value="アップロード実行">
+</form>
+</body>
+</html>
+

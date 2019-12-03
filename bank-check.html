@@ -1,0 +1,18 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="ja">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<title></title>
+</head>
+<body>
+<h3>請求・振込照合システム</h3>
+<br><br>
+<form name="FORM1" action="bank-check.cgi" method="post" enctype="multipart/form-data">
+請求データURL：<input type=text name="seikyuDataURL" size=100><br>
+　　ID：<input type=text name="seikyuID" size=20>
+　　パスワード：<input type=password name="seikyuPass" size=20><br><br>
+銀行CSVファイル：<input type=file name="bankCSVFile" size=60><br><br>
+<button name="go">実行</button>
+</form>
+</body>
+</html>

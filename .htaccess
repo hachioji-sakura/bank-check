@@ -1,0 +1,13 @@
+Options -Indexes
+DirectoryIndex login.php       
+order allow,deny
+<Files ~ "^\.(htaccess|htpasswd)$">
+deny from all
+</Files>
+<Files ~ "\.(php|html|css|js|cgi)$">
+allow from all
+</Files>
+deny from all 
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R,L]
