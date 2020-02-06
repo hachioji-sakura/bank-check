@@ -12,6 +12,8 @@ require_once("./hosei.inc");
 $errArray = array();
 $errFlag = 0;
 
+//$debug_member_no = '001051';
+
 $db->beginTransaction();
 try {
 
@@ -60,13 +62,14 @@ for ($i=0;$i<$mcount-1;$i++,$month--) {
 	            $buffer = preg_replace ( '@\p{Cc}@u', '', mb_convert_encoding(fgets($fp),'utf8', 'sjis') );
 	            if (ctype_digit(substr($buffer ,0,8))) {
 		            list($bankTrDate,$bankTrID,$bankTrAmount,,,$bankTrName) = explode(",",$buffer);
+								$bankTrName = trim($bankTrName);
 								if (substr($bankTrDate,0,6)!="$year$month2") continue;
 		            if ($bankTrName=='') continue;
 		            if ($bankTrAmount==0) continue;
 		            $bankData0["bankTrDate"] = $bankTrDate;
 		            $bankData0["bankTrAmount"] = $bankTrAmount;
 		            $bankData0["mId"] = $i; $bankData0["year"] = $year; $bankData0["month"] = $month;
-					$bankData[$i][$bankTrName][] = $bankData0;
+								$bankData[$i][$bankTrName][] = $bankData0;
 //		            $log1 .= $bankTrDate."-1-".$bankTrID."-2-".$bankTrAmount."-3-".$bankTrData."-4-".$bankTrName."<br>\n";
 				}
 	        }
@@ -84,6 +87,7 @@ $furikomisha_array = $stmt->fetchAll(PDO::FETCH_ASSOC);
 foreach ( $furikomisha_array  as $item ) { 
 	$array = mb_split(':',$item['member_no']);
 	foreach($array as $member_no) {
+if ($debug_member_no && $member_no != $debug_member_no) continue;
 		$furikomisha_list[$member_no][] = $item['furikomisha_name'];
 }}
 
@@ -126,6 +130,7 @@ if ($cond_name != "") {
 // 20150816 ふりがなの50音順にソートする
 $order_array = array("tbl_member.furigana asc");
 
+if ($debug_member_no)	array_push($param_array, "no='$debug_member_no'");
 
 // 20151230 授業料表示のため変更
 //$member_list = get_simple_member_list($db, $param_array, $value_array, $order_array);
@@ -190,13 +195,13 @@ foreach($ret as $item) {
 }
 
 
-// その他から売上外調整を取得
+// その他から売上外請求追加を取得
 $sql = "SELECT * FROM tbl_others WHERE kind=8";
 $stmt = $db->prepare($sql);
 $stmt->execute();
 $ret = $stmt->fetchAll(PDO::FETCH_ASSOC);
 foreach ($ret as $item) {
-	$kabarai_hosei[$item['member_no']][$item['year']][$item['month']] = $item['price'];
+	$kabarai_hosei[$item['member_no']][$item['year']][$item['month']][$item['charge']] = $item['price'];
 }
 
 
@@ -265,167 +270,20 @@ foreach ($member_list as $member_no => $member) {
 			$value_array = array($member_no, $year, $month);
 			$order_array = array();
 			$others_list = get_others_list($db, $param_array, $value_array, $order_array);
-			$others_price = 0;
-			foreach ($others_list as $key => $others) { $others_price += (int)str_replace(",","",$others["price"]); }
-			if ($member['tax_flag']  == "1" && $others["tax_flag"] == null) { $others_price = $others_price + floor($others_price * 0.08); }
-			$tmp_student["others_price_no_charge"][$i] = $others_price;
+			$tmp_student["others_price_no_charge"][$i] = 0;
+			foreach ($others_list as $key => $others) {
+				$others_price = (int)str_replace(",","",$others["price"]);
+//			if ($member['tax_flag']  == "1" && $others["tax_flag"] == null) { $others_price = $others_price + floor($others_price * get_cons_tax_rate($year,$month)); }
+				if ($others["charge"] == 1)
+					$tmp_student["last_total_price"][$i] += $others_price;
+				else
+					$tmp_student["others_price_no_charge"][$i] += $others_price;				
+			}
 		}
 		
 		if ($seikyu_hosei[$member['name']][$year][$month]) {
 			$tmp_student["last_total_price"][$i] += $seikyu_hosei[$member['name']][$year][$month];
 		}
-
-
-/*
-	  $statement_list = array();
-
-		if (count($statement_array) > 0) {
-			$statement_no = $statement_array[0]["statement_no"];
-			$statement_list[$statement_no] = $statement_array[0];
-
-			$sql = "SELECT * FROM tbl_statement_detail where statement_no=?";
-			$stmt = $db->prepare($sql);
-			$stmt->bindParam(1, $tmp_statement_no);
-			$tmp_statement_no = $statement_no;
-			$stmt->execute();
-			$statement_event_array = $stmt->fetchAll(PDO::FETCH_BOTH);
-			$statement_list[$statement_no]['event_list'] = $statement_event_array;
-		}
-
-		$total_price = 0;
-		foreach ($statement_list as $statement_no => $statement) {
-			// 月会費
-			$membership_fee = (int)str_replace(",","",$statement["membership_fee"]);
-			$total_price = $total_price + $membership_fee;
-			//$price_list['membership_fee'] = $price_list['membership_fee'] + $membership_fee;
-
-			// 20160127 消費税金額（生徒ごとに異なる）
-			$consumption_tax_price = (int)str_replace(",","",$statement["consumption_tax_price"]);
-			//$price_list['consumption_tax_price'] = $price_list['consumption_tax_price'] + $consumption_tax_price;
-			//$total_consumption_tax_price = $total_consumption_tax_price + $consumption_tax_price;
-			//$total_price = $membership_fee + $consumption_tax_price;
-
-			// 科目別授業料
-			$total_hours = 0;
-			$total_fees = 0;
-			foreach ($statement["event_list"] as $event) {
-				//$lesson_id = $event["lesson_id"];
-				$fees = (int)str_replace(",","",$event["fees"]);
-				$total_fees = $total_fees + $fees;
-				$total_hours = $total_hours + $event["diff_hours"];
-
-				//if (array_key_exists($lesson_id, $price_list['lesson']) === true) {
-				// すでに科目がprice_listにあるとき
-					//$price_list['lesson'][$lesson_id] = $price_list['lesson'][$lesson_id] + $fees;
-					//$total_price = $total_price + $fees;
-					//$lesson_total_price = $lesson_total_price + $fees;
-				//} else {
-				// まだ科目がprice_listにないとき
-				//	$price_list['lesson'][$lesson_id] = $fees;
-				//}
-				//$fees = 0;
-			}
-			$total_price = $total_price + $total_fees;
-		}
-
-		// 授業料分割払い（対象年月に支払った分だけでよい：確認済み）
-		$divided_payment_total_price = 0;
-		$param_array = array("tbl_divided_payment.member_no=?", "tbl_divided_payment_detail.payment_year=?", "tbl_divided_payment_detail.payment_month=?");
-		$value_array = array($member_no, $year, $month);
-		$order_array = array("tbl_divided_payment.payment_no","tbl_divided_payment_detail.time_no");
-		$sql = 
-			"SELECT
-					tbl_divided_payment.payment_no as payment_no,
-					tbl_divided_payment.member_no as member_no,
-					tbl_divided_payment.year as year,
-					tbl_divided_payment.month as month,
-					tbl_divided_payment.lesson_id as lesson_id,
-					tbl_divided_payment.type_id as type_id,
-					tbl_divided_payment.time as time,
-					tbl_divided_payment.payment_price as payment_price,
-					tbl_divided_payment.memo as memo,
-					tbl_divided_payment_detail.payment_no as payment_no,
-					tbl_divided_payment_detail.time_no as time_no,
-					tbl_divided_payment_detail.payment_year as payment_year,
-					tbl_divided_payment_detail.payment_month as payment_month,
-					tbl_divided_payment_detail.price as price
-			 FROM tbl_divided_payment, tbl_divided_payment_detail";
-		$sql .= " where tbl_divided_payment_detail.payment_no = tbl_divided_payment.payment_no";
-	  if(count($param_array) > 0){
-	    $sql .= " and " . join(" and ",$param_array);
-	  }
-	  if(count($order_array) > 0){
-	    $sql .= "	order by " . join(" , ",$order_array);
-	  }
-		else {
-			$sql .= "	order by tbl_divided_payment.year, tbl_divided_payment.month";
-		}
-		$stmt = $db->prepare($sql);
-		$stmt->execute($value_array);
-		$divided_payment_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
-		foreach ($divided_payment_list as $divided_payment) {
-			//$lesson_id = $divided_payment["lesson_id"];
-			$divided_payment_price = (int)str_replace(",","",$divided_payment["price"]);
-			//$price_list['lesson'][$lesson_id] = $price_list['lesson'][$lesson_id] + $divided_payment_price;
-			$total_price = $total_price + $divided_payment_price;
-			//$lesson_total_price = $lesson_total_price + $divided_payment_price;
-			$divided_payment_total_price = $divided_payment_total_price + $divided_payment_price;
-			if ($divided_payment["year"] == $year && $divided_payment["month"] == $month) {
-				//$payment_price = (int)str_replace(",","",$divided_payment["payment_price"]);
-				//$price_list['lesson'][$lesson_id] = $price_list['lesson'][$lesson_id] - $divided_payment["payment_price"];
-				$total_price = $total_price - $divided_payment["payment_price"];
-				//$lesson_total_price = $lesson_total_price - $divided_payment["payment_price"];
-				$total_fees = $total_fees + $divided_payment["payment_price"];
-			}
-		}
-
-		// 月会費
-		//$tmp_membership_fee = $calculator->get_membership_fee();
-		//$membership_fee = (int)str_replace(",","",$tmp_membership_fee);
-		//$price_list['membership_fee'] = $price_list['membership_fee'] + $membership_fee;
-		//$total_price = $total_price + $membership_fee;
-
-		// テキスト代（模試代含む）
-		// 20151009 テキスト購入テーブルに科目も登録してあるが集計には使わない
-		$param_array = array("tbl_buying_textbook.member_no=?", "tbl_buying_textbook.year=?", "tbl_buying_textbook.month=?");
-		$value_array = array($member_no, $year, $month);
-		$order_array = array("tbl_buying_textbook.input_year", "tbl_buying_textbook.input_month", "tbl_buying_textbook.input_day", "tbl_buying_textbook.buying_no");
-		$buying_textbook_list = get_buying_textbook_list($db, $param_array, $value_array, $order_array);
-		$textbook_total_price = 0;
-		foreach ($buying_textbook_list as $buying) {
-			$textbook_total_price = $textbook_total_price + $buying["price"];
-			$total_price = $total_price + $buying["price"];
-		}
-
-		// その他項目（これまでの模試代がこちらに含まれている）
-		$others_total_price = 0;
-		$param_array = array("tbl_others.member_no=?", "tbl_others.year=?", "tbl_others.month=?");
-		$value_array = array($member_no, $year, $month);
-		$order_array = array("tbl_others.year, tbl_others.month, tbl_others.others_no");
-		$others_list = get_others_list($db, $param_array, $value_array, $order_array);
-		foreach ($others_list as $key => $others) {
-			$others_price = (int)str_replace(",","",$others["price"]);
-
-			$others_total_price = $others_total_price + $others_price;
-			$total_price = $total_price + $others_price;
-		}
-
-		// 入会費
-		$entrance_fee_total_price = 0;
-		$param_array = array("tbl_entrance_fee.member_no=?", "tbl_entrance_fee.year=?", "tbl_entrance_fee.month=?");
-		$value_array = array($member_no, $year, $month);
-		$order_array = array("tbl_entrance_fee.year, tbl_entrance_fee.month, tbl_entrance_fee.entrance_fee_no");
-		$entrance_fee_list = get_entrance_fee_list($db, $param_array, $value_array, $order_array);
-		foreach ($entrance_fee_list as $key => $entrance_fee) {
-			$entrance_fee_price = (int)str_replace(",","",$entrance_fee["price"]);
-			//$price_list['entrance_fee'] = $price_list['entrance_fee'] + $entrance_fee_price;
-			$entrance_fee_total_price = $entrance_fee_total_price + $entrance_fee_price;
-			$total_price = $total_price + $entrance_fee_price;
-		}
-
-		$tmp_student["last_total_price"][$i] = $total_price + $consumption_tax_price;
-		
-*/
 	}
 	
 	$seikyu_total = 0;
@@ -433,6 +291,7 @@ foreach ($member_list as $member_no => $member) {
 	for ($i=$mcount-1;$i>=0;$i--) {
 		$seikyu_total += $tmp_student["last_total_price"][$i];
 		$seikyu_total += $tmp_student["others_price_no_charge"][$i];
+		$seikyu_total -= $kabarai_hosei[$member['no']][$year1[$i]][$month1[$i]][1];
 		if ( array_key_exists( $i, $bankData ) ) {
 			foreach ($furikomisha_list0 as $furikomisha_name) { 
 			$bankData0 = $bankData[$i][$furikomisha_name];
@@ -440,24 +299,12 @@ foreach ($member_list as $member_no => $member) {
 				foreach ($bankData0 as $item) { $furikomi_total += $item["bankTrAmount"]; };
 			}
 		}
-//		if ($JieiFurikomiHosei[$member['name']][$year1[$i]][$month1[$i]]) {
-//			$furikomi_total -= $JieiFurikomiHosei[$member['name']][$year1[$i]][$month1[$i]];
-//		}
-//		if ($kabarai_hosei[$member['no']][$year1[$i]][$month1[$i]]) {
-//			$furikomi_total -= $kabarai_hosei[$member['no']][$year1[$i]][$month1[$i]];
-//		}
 		$tmp_student["furikomi_total"][$i] = $furikomi_total;
 		$tmp_student["seikyu_total"][$i] = $seikyu_total;
+		$tmp_student["seikyu_total0"][$i] = $seikyu_total;
 		$tmp_student["last_total_price1"][$i] = $tmp_student["last_total_price"][$i];
 	}
-	
 	if (($seikyu_total == 0) && ($furikomi_total == 0)) {continue;}
-//	if ( $mcount>12 && 
-//			($tmp_student["seikyu_total"][$mcount%12] == $tmp_student["seikyu_total"][0]) && 
-//			($tmp_student["furikomi_total"][$mcount%12] == $tmp_student["furikomi_total"][0]) &&
-//			($tmp_student["seikyu_total"][$mcount%12] == $tmp_student["furikomi_total"][$mcount%12])) {
-//		continue;
-//	}
 		
 	$student_list[] = $tmp_student;
 }
@@ -472,8 +319,8 @@ foreach ($student_list1 as $item) {
 		for ($i=$mcount-1;$i>=0;$i--) {
 			if ($JieiFurikomiHosei[$item['name']][$year1[$i]][$month1[$i]])
 				$hosei_total += $JieiFurikomiHosei[$item['name']][$year1[$i]][$month1[$i]];
-			if ($kabarai_hosei[$item['no']][$year1[$i]][$month1[$i]])
-				$hosei_total += $kabarai_hosei[$item['no']][$year1[$i]][$month1[$i]];
+			if ($kabarai_hosei[$item['no']][$year1[$i]][$month1[$i]][2])
+				$hosei_total += $kabarai_hosei[$item['no']][$year1[$i]][$month1[$i]][2];
 			$item["furikomi_total"][$i] -= $hosei_total;
 		}
 		if ($item["seikyu_total"][$mlength]!=$item["seikyu_total"][0] ||
@@ -491,8 +338,8 @@ foreach ($student_list1 as $item) {
 					$last_total_price1s[$i] += $item1["last_total_price"][$i];
 					if ($JieiFurikomiHosei[$item1['name']][$year1[$i]][$month1[$i]])
 						$furikomi_hoseis[$i] += $JieiFurikomiHosei[$item1['name']][$year1[$i]][$month1[$i]];
-					if ($kabarai_hosei[$item1['no']][$year1[$i]][$month1[$i]])
-						$furikomi_hoseis[$i] += $kabarai_hosei[$item1['no']][$year1[$i]][$month1[$i]];
+					if ($kabarai_hosei[$item1['no']][$year1[$i]][$month1[$i]][2])
+						$furikomi_hoseis[$i] += $kabarai_hosei[$item1['no']][$year1[$i]][$month1[$i]][2];
 				}
 			}
 		foreach ($furikomisha_list[$item["no"]] as $furikomisha_name) { $furikomisha_count[$furikomisha_name] = 0; }
@@ -515,6 +362,7 @@ foreach ($student_list1 as $item) {
 
 	$year = $year0;
 	$month = $month0;
+if (!$debug_member_no) {
 	$bankData1 = array();
 	for ($i=0;$i<$mcount;$i++)
 		if ( array_key_exists( $i, $bankData ) )
@@ -546,6 +394,7 @@ foreach ($student_list1 as $item) {
 			$tmp_student["furikomisha_count"] = 1;
 			$student_list2[] = $tmp_student;
 		}
+}
 
 	// 表示期間ALL0生徒削除
 	foreach ($student_list2 as $key=>$item) {
@@ -582,7 +431,6 @@ foreach ($student_list1 as $item) {
 function fwritesjis( $fp, $s) {
 	fwrite ($fp, mb_convert_encoding($s,'sjis','utf8'));
 }
-
 $csvfname = "tmp".time().".csv";
 
 $fp = fopen ("./tmp/".$csvfname, "w");
@@ -596,18 +444,18 @@ if ($fp){
 	for ($i=$mcount-1;$i>=0;$i--) {
 		if ($i>$mlength) { continue; }
 		if ($i!=$mlength) {
-				fwritesjis( $fp, '"'.$year1[$i].'年'.$month1[$i].'月入金",' );
-				fwritesjis( $fp, '"'.$year1[$i].'年'.$month1[$i].'月売上外調整金",' );
-			fwritesjis( $fp, '"'.$year1[$i].'年'.$month1[$i].'月末未払金",' );
-			$m0=$month1[$i]+1; if($m0>12){$m0=$m0-12;};
-			fwritesjis( $fp, '"'.$year1[$i].'年'.$month1[$i].'月分月謝'.$m0.'月請求",' );
-			fwritesjis( $fp, '"'.$year1[$i].'年'.$month1[$i].'月分売上調整金",' );
+			fwritesjis( $fp, '"'.$year1[$i].'年'.$month1[$i].'月入金",' );
+			fwritesjis( $fp, '"'.$year1[$i].'年'.$month1[$i].'月未払金",' );
+			fwritesjis( $fp, '"'.$year1[$i].'年'.$month1[$i].'月売上",' );
+			fwritesjis( $fp, '"'.$year1[$i].'年'.$month1[$i].'月売上外請求追加",' );
+			fwritesjis( $fp, '"'.$year1[$i].'年'.$month1[$i].'月請求",' );
+			fwritesjis( $fp, '"'.$year1[$i].'年'.$month1[$i].'月振込・会計調整",' );
 		}
-		fwritesjis( $fp, '"'.$year1[$i].'年'.$month1[$i].'月末売掛金残",' );
+		fwritesjis( $fp, '"'.$year1[$i].'年'.$month1[$i].'月売掛金残",' );
 	}
 	fwritesjis( $fp, "\n" );
 	$lineno = 1;
-	for ($i=$mcount-1;$i>=0;$i--) { $fTotal[$i]=0; $kTotal[$i]=0; $sTotal[$i]=0; $nTotal[$i]=0; $uTotal[$i]=0; };
+	for ($i=$mcount-1;$i>=0;$i--) { $fTotal[$i]=0; $kTotal[$i]=0; $sTotal[$i]=0; $nTotal[$i]=0; $uTotal[$i]=0; $mTotal[$i]=0; $uriageTotal[$i]=0; };
 	foreach (array_reverse($student_list2) as $item) {
 		$fc=$item["furikomisha_count"];
 		fwritesjis( $fp, $lineno++."," );
@@ -622,28 +470,30 @@ if ($fp){
 		fwritesjis( $fp, '"'.$name.'",' );
 		for ($i=$mcount-1;$i>=0;$i--) {
 			if ($i>$mlength) { continue; }
-			// 入金
 			if ($i!=$mlength) {
-					if ($fc>=1) {
-						$s = $item["furikomi0"][$i];
-						fwritesjis( $fp, '"'.$s.'",' );
-						$fTotal[$i] -= $item["furikomi1"][$i];
-					} else {
-						fwritesjis( $fp, '"上に含まれる",' );
-					}
-					fwritesjis( $fp, '"'.number_format($item["kabarai_hosei"][$i]).'",' );
-					$kTotal[$i] += ($item["kabarai_hosei"][$i]);
 				if ($fc>=1) {
-					fwritesjis( $fp, '"'.number_format($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i]).'",' );
+					// 入金
+					$s = $item["furikomi0"][$i];
+					fwritesjis( $fp, '"'.$s.'",' );
+					$fTotal[$i] -= $item["furikomi1"][$i];
+					// 未払い
+					fwritesjis( $fp, '"'.number_format($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i]).'",' );
+					$mTotal[$i] += $item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i];
 				} else {
 					fwritesjis( $fp, '"上に含まれる",' );
 				}
+				// 売上
+				fwritesjis( $fp, '"'.number_format($item["seikyu_total0"][$i]-$item["seikyu_total0"][$i+1]).'",' );
+				$uriageTotal[$i] += $item["seikyu_total0"][$i]-$item["seikyu_total0"][$i+1];
+				// 売上外請求追加
+				fwritesjis( $fp, '"'.number_format($item["kabarai_hosei"][$i][1]).'",' );
+				$kTotal[$i] += $item["kabarai_hosei"][$i][1];
 				// 請求
 				fwritesjis( $fp, '"'.number_format($item["last_total_price"][$i]).'",' );
-				$sTotal[$i] += ($item["last_total_price"][$i]);
-				// 売上調整金
-				fwritesjis( $fp, '"'.number_format($item["others_price_no_charge"][$i]).'",' );
-				$nTotal[$i] += ($item["others_price_no_charge"][$i]);
+				$sTotal[$i] += $item["last_total_price"][$i];
+				// 振込・会計調整金
+				fwritesjis( $fp, '"'.number_format($item["kabarai_hosei"][$i][2]).'",' );
+				$nTotal[$i] += $item["kabarai_hosei"][$i][2];
 			}
 			// 月末売掛金残
 			if ($fc>=1) {
@@ -659,9 +509,10 @@ if ($fp){
 	for ($i=$mcount-1;$i>=0;$i--) {
 		if ($i>$mlength) { continue; }
 		if ($i!=$mlength) {
-				fwritesjis( $fp, '"'.number_format(-$fTotal[$i]).'",');
-				fwritesjis( $fp, '"'.number_format($kTotal[$i]).'",');
-			fwritesjis( $fp, '"'.number_format($uTotal[$i+1]-$fTotal[$i]+$kTotal[$i]).'",' );
+			fwritesjis( $fp, '"'.number_format(-$fTotal[$i]).'",');
+			fwritesjis( $fp, '"'.number_format($mTotal[$i]).'",');
+			fwritesjis( $fp, '"'.number_format($uriageTotal[$i]).'",');
+			fwritesjis( $fp, '"'.number_format($kTotal[$i]).'",');
 			fwritesjis( $fp, '"'.number_format($sTotal[$i]).'",' );
 			fwritesjis( $fp, '"'.number_format($nTotal[$i]).'",' );
 		}
@@ -727,10 +578,13 @@ table{
 HTML00a;
 for ($i=$mcount-1;$i>=0;$i--) {
 if ($i>$mlength) { continue; }
-$m0=$month1[$i]+1; if($m0>12){$m0=$m0-12;};
-if ($i!=$mlength){
-	 echo "	<th width=80 >$year1[$i]/$month1[$i]<br>入金</th>";
-	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>月謝</th>";
+if ($i!=$mlength) {
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>入金</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>未払金</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上外請求追加</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>請求</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>振込・会計調整</th>";
 }
 echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売掛金残</th>";
 }
@@ -783,13 +637,13 @@ echo "<tr>";
 echo "	<th width=100>振込者名</th>";
 for ($i=$mcount-1;$i>=0;$i--) {
 if ($i>$mlength) { continue; }
-$m0=$month1[$i]+1; if($m0>12){$m0=$m0-12;};
 if ($i!=$mlength) {
-		echo "	<th width=80 >$year1[$i]/$month1[$i]<br>入金</th>";
-		echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上外調整</th>";
-		echo "	<th width=80 >$year1[$i]/$month1[$i]<br>未払金</th>";
-	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>月謝</th>";
-	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上調整</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>入金</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>未払金</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上外請求追加</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>請求</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>振込・会計調整</th>";
 }
 echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売掛金残</th>";
 }
@@ -914,24 +768,25 @@ foreach (array_reverse($student_list2) as $item) {
 		if ($i>$mlength) { continue; }
 		if ($i!=$mlength) {
 			// 入金
-				if($fc>0) { echo "<td width=80 align=right bgcolor=#ddffdd $rowspan>".($off_flag[$i+1]?'':$item["furikomi"][$i])."</td>"; }
-				echo "<td width=80 align=right>".number_format($item["kabarai_hosei"][$i])."</td>";
+			if($fc>0) { echo "<td width=80 align=right bgcolor=#ddffdd $rowspan>".($off_flag[$i+1]?'':$item["furikomi"][$i])."</td>"; }
 			if ($i==0) { $name_mibarai="name=mibarai"; } else { $name_mibarai=""; };
-			
-//			if ($i>0 && $item["seikyu_total"][$i+1]-$item["furikomi_total"][$i]==0 &&
-//					$item["others_price_no_charge"][$i]==0 &&
-//					$item["last_total_price"][$i]+$item["furikomi1"][$i-1]==0) {$off_flag[$i]=1;} else {$off_flag[$i]=0;}
-
 			if ($fc>0 && $match_off)	$off_flag[$i]=($item["last_total_price1"][$i]+$item["furikomi1"][$i-1]==0)?1:0;
-
-			if($fc>0) { echo "<td $name_mibarai width=80 align=right bgcolor=#ffdddd $rowspan>".(0?'':number_format($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i]))."</td>"; }
+			// 未払い
+			if($fc>0) { echo "<td $name_mibarai width=80 align=right bgcolor=#ffdddd $rowspan>".number_format($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i])."</td>"; }
+			// 売上
+			echo "<td width=80 align=right bgcolor=#ddddff>".($off_flag[$i]?'':number_format($item["seikyu_total0"][$i]-$item["seikyu_total0"][$i+1]))."</td>";
+			// 売上外請求追加
+			echo "<td width=80 align=right>".number_format($item["kabarai_hosei"][$i][1])."</td>";
 			// 請求
-			echo "<td width=80 align=right bgcolor=#ddddff>".($off_flag[$i]?'':number_format($item["last_total_price"][$i]))."</td>";
-			// 売上調整金
-			echo "<td width=80 align=right>".(0?'':number_format($item["others_price_no_charge"][$i]))."</td>";
+			echo "<td width=80>".number_format($item["last_total_price"][$i])."</td>";
+			// 振込・会計調整金
+			echo "<td width=80 align=right>".(0?'':number_format($item["kabarai_hosei"][$i][2]))."</td>";
 		}
 		// 月末売掛金残
-		if($fc>0) { echo "<td width=80 align=right $rowspan>".($off_flag[$i]?number_format($item["seikyu_total"][$i]-$item["last_total_price1"][$i]-$item["furikomi_total"][$i]):number_format($item["seikyu_total"][$i]-$item["furikomi_total"][$i]))."</td>"; }
+		if($fc>0) { echo "<td width=80 align=right $rowspan>".
+		($off_flag[$i]?number_format($item["seikyu_total"][$i]-$item["last_total_price1"][$i]-$item["furikomi_total"][$i]):number_format($item["seikyu_total"][$i]-$item["furikomi_total"][$i])).
+//		($off_flag[$i]?"<BR>{$item['seikyu_total'][$i]}-{$item['last_total_price1'][$i]}-{$item['furikomi_total'][$i]}":"<BR>{$item['seikyu_total'][$i]}-{$item['furikomi_total'][$i]}").
+		"</td>"; }
 	}
 	echo "</tr>\n";
 }
@@ -939,9 +794,10 @@ foreach (array_reverse($student_list2) as $item) {
 for ($i=$mcount-1;$i>=0;$i--) {
 	if ($i>$mlength) { continue; }
 	if ($i!=$mlength) {
-			echo "<td align=right>".number_format(-$fTotal[$i])."</td>";
-			echo "<td align=right>".number_format($kTotal[$i])."</td>";
-		echo "<td align=right>".number_format($uTotal[$i+1]-$fTotal[$i]+$kTotal[$i])."</td>";
+		echo "<td align=right>".number_format(-$fTotal[$i])."</td>";
+		echo "<td align=right>".number_format($mTotal[$i])."</td>";
+		echo "<td align=right>".number_format($uriageTotal[$i])."</td>";
+		echo "<td align=right>".number_format($kTotal[$i])."</td>";
 		echo "<td align=right>".number_format($sTotal[$i])."</td>";
 		echo "<td align=right>".number_format($nTotal[$i])."</td>";
 	}
@@ -1065,24 +921,27 @@ foreach (array_reverse($student_list2) as $item) {
 		if ($i>$mlength) { continue; }
 		if ($i!=$mlength) {
 			// 入金
-				if($fc>0) { echo "<td width=80 align=right bgcolor=#ddffdd $rowspan>".($off_flag[$i+1]?'':$item["furikomi"][$i])."</td>"; }
-				echo "<td width=80 align=right>".number_format($item["kabarai_hosei"][$i])."</td>";
+			if($fc>0) { echo "<td width=80 align=right bgcolor=#ddffdd $rowspan>".($off_flag[$i+1]?'':$item["furikomi"][$i])."</td>"; }
 			if ($i==0) { $name_mibarai="name=mibarai"; } else { $name_mibarai=""; };
-			
-//			if ($i>0 && $item["seikyu_total"][$i+1]-$item["furikomi_total"][$i]==0 &&
-//					$item["others_price_no_charge"][$i]==0 &&
-//					$item["last_total_price"][$i]+$item["furikomi1"][$i-1]==0) {$off_flag[$i]=1;} else {$off_flag[$i]=0;}
-
 			if ($fc>0 && $match_off)	$off_flag[$i]=($item["last_total_price1"][$i]+$item["furikomi1"][$i-1]==0)?1:0;
-
-			if($fc>0) { echo "<td $name_mibarai width=80 align=right bgcolor=#ffdddd $rowspan>".(0?'':number_format($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i]))."</td>"; }
-			// 請求
-			echo "<td width=80 align=right bgcolor=#ddddff>".($off_flag[$i]?'':number_format($item["last_total_price"][$i]))."</td>";
-			// 売上調整金
-			echo "<td width=80 align=right>".(0?'':number_format($item["others_price_no_charge"][$i]))."</td>";
+			// 未払い
+			if($fc>0) { echo "<td $name_mibarai width=80 align=right bgcolor=#ffdddd $rowspan>".number_format($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i]).
+//					"<br>{$item["seikyu_total"][$i+1]}-{$item["furikomi_total"][$i]}".
+					"</td>"; }
+			// 売上
+			echo "<td width=80 align=right bgcolor=#ddddff>".($off_flag[$i]?'':number_format($item["seikyu_total0"][$i]-$item["seikyu_total0"][$i+1]))."</td>";
+			// 売上外請求追加
+			echo "<td width=80 align=right>".number_format($item["kabarai_hosei"][$i][1])."</td>";
+			echo "<td width=80 >".number_format($item["last_total_price"][$i])."</td>";
+			// 振込・会計調整金
+			echo "<td width=80 align=right>".(0?'':number_format($item["kabarai_hosei"][$i][2]))."</td>";
 		}
 		// 月末売掛金残
-		if($fc>0) { echo "<td width=80 align=right $rowspan>".($off_flag[$i]?number_format($item["seikyu_total"][$i]-$item["last_total_price1"][$i]-$item["furikomi_total"][$i]):number_format($item["seikyu_total"][$i]-$item["furikomi_total"][$i]))."</td>"; }
+//		if($fc>0) { echo "<td width=80 align=right $rowspan>".($off_flag[$i]?number_format($item["seikyu_total"][$i]-$item["last_total_price1"][$i]-$item["furikomi_total"][$i]):number_format($item["seikyu_total"][$i]-$item["furikomi_total"][$i]))."</td>"; }
+		if($fc>0) { echo "<td width=80 align=right $rowspan>".
+		($off_flag[$i]?number_format($item["seikyu_total"][$i]-$item["last_total_price1"][$i]-$item["furikomi_total"][$i]):number_format($item["seikyu_total"][$i]-$item["furikomi_total"][$i])).
+//		($off_flag[$i]?"<BR>{$item['seikyu_total'][$i]}-{$item['last_total_price1'][$i]}-{$item['furikomi_total'][$i]}":"<BR>{$item['seikyu_total'][$i]}-{$item['furikomi_total'][$i]}").
+		"</td>"; }
 	}
 	echo "</tr>\n";
 }
@@ -1090,9 +949,10 @@ foreach (array_reverse($student_list2) as $item) {
 for ($i=$mcount-1;$i>=0;$i--) {
 	if ($i>$mlength) { continue; }
 	if ($i!=$mlength) {
-			echo "<td align=right>".number_format(-$fTotal[$i])."</td>";
-			echo "<td align=right>".number_format($kTotal[$i])."</td>";
-		echo "<td align=right>".number_format($uTotal[$i+1]-$fTotal[$i]+$kTotal[$i])."</td>";
+		echo "<td align=right>".number_format(-$fTotal[$i])."</td>";
+		echo "<td align=right>".number_format($mTotal[$i])."</td>";
+		echo "<td align=right>".number_format($uriageTotal[$i])."</td>";
+		echo "<td align=right>".number_format($kTotal[$i])."</td>";
 		echo "<td align=right>".number_format($sTotal[$i])."</td>";
 		echo "<td align=right>".number_format($nTotal[$i])."</td>";
 	}
@@ -1142,7 +1002,7 @@ table{
 <input type=checkbox onclick="zaiseki0(this)">在籍生徒のみ表示</td>
 <td width=150><a href="../schedule/tokusoku.php?y={$year0}&m={$month0}" target="_top">督促へ</a><br><a href="../schedule/menu.php" target="_top">メニューへ戻る</a></td>
 <td width=150><input type=button value="&nbsp;CSVダウンロード&nbsp;" onclick="download();"></td>
-<td><input type=button value="&nbsp;月謝入金一致非表示&nbsp;" onclick="top.location.href='./bank-check.php?y=$year0&m=$month0&l=$mlength&moff=1'"></td>
+<td><input type=button value="&nbsp;売上入金一致非表示&nbsp;" onclick="top.location.href='./bank-check.php?y=$year0&m=$month0&l=$mlength&moff=1'"></td>
 </tr>
 </table>
 </body>
@@ -1205,7 +1065,7 @@ table{
 <input type=checkbox onclick="zaiseki0(this)">在籍生徒のみ表示</td>
 <td width=150><a href="../schedule/tokusoku.php?y={$year0}&m={$month0}" target="_top">督促へ</a><br><a href="../schedule/menu.php" target="_top">メニューへ戻る</a></td>
 <td width=150><input type=button value="&nbsp;CSVダウンロード&nbsp;" onclick="download();"></td>
-<td><input type=button value="&nbsp;月謝入金一致非表示&nbsp;" onclick="top.location.href='./bank-check.php?y=$year0&m=$month0&l=$mlength&moff=1'"></td>
+<td><input type=button value="&nbsp;売上入金一致非表示&nbsp;" onclick="top.location.href='./bank-check.php?y=$year0&m=$month0&l=$mlength&moff=1'"></td>
 </tr>
 </table>
 <table border="0" cellspacing="0" cellpadding="0">
@@ -1220,10 +1080,13 @@ table{
 HTML00a1;
 for ($i=$mcount-1;$i>=0;$i--) {
 if ($i>$mlength) { continue; }
-$m0=$month1[$i]+1; if($m0>12){$m0=$m0-12;};
 if ($i!=$mlength) {
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>入金</th>";
-	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>月謝</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>未払金</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上外請求追加</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>請求</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>振込・会計調整</th>";
 }
 echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売掛金残</th>";
 }
