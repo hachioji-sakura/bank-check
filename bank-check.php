@@ -12,7 +12,7 @@ require_once("./hosei.inc");
 $errArray = array();
 $errFlag = 0;
 
-//$debug_member_no = '001051';
+//$debug_member_no = '001126';
 
 $db->beginTransaction();
 try {
@@ -311,6 +311,14 @@ foreach ($member_list as $member_no => $member) {
 
 $student_list2 = array();
 $student_list1 = array_reverse($student_list);
+
+foreach ($furikomisha_count as $furikomisha_name=>$item) {
+	$fc = 0;
+	foreach ($student_list1 as $item1)
+		if (in_array($furikomisha_name,$furikomisha_list[$item1["no"]])) $fc++;
+	$furikomisha_count[$furikomisha_name] = $fc;
+}
+
 foreach ($student_list1 as $item) {
 	$fc= $furikomisha_count[$furikomisha_list[$item["no"]][0]];
 	if (!isset($fc) || ($fc == 1)) {
@@ -323,8 +331,9 @@ foreach ($student_list1 as $item) {
 				$hosei_total += $kabarai_hosei[$item['no']][$year1[$i]][$month1[$i]][2];
 			$item["furikomi_total"][$i] -= $hosei_total;
 		}
-		if ($item["seikyu_total"][$mlength]!=$item["seikyu_total"][0] ||
-				$item["furikomi_total"][$mlength]!=$item["furikomi_total"][0] ) 
+		if ($item["seikyu_total"][$mlength]  != $item["seikyu_total"][0] ||
+				$item["furikomi_total"][$mlength]!= $item["furikomi_total"][0] ||
+				$item["seikyu_total"][$mlength]  != $item["furikomi_total"][$mlength])
 			$student_list2[] = $item;
 	} elseif ($fc > 1 ) {
 		for ($i=0;$i<$mcount;$i++) $seikyu_totals[$i] = 0;
@@ -371,6 +380,8 @@ if (!$debug_member_no) {
 			}
 	foreach ($bankData1 as $name => $bankData2)
  		if ( !array_key_exists( $name, $furikomisha_count ) ) {
+			$furikomisha_index = array_search($name, array_column($furikomisha_array,'furikomisha_name'));
+			if ($furikomisha_index !== false && $furikomisha_array[$furikomisha_index]['no'] == '' ) continue;
 			$tmp_student = array();
 			$tmp_student["name"] = "―不明―";
 			$tmp_student["furikomisha_name"] = $name;
@@ -480,6 +491,7 @@ if ($fp){
 					fwritesjis( $fp, '"'.number_format($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i]).'",' );
 					$mTotal[$i] += $item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i];
 				} else {
+					fwritesjis( $fp, '"上に含まれる",' );
 					fwritesjis( $fp, '"上に含まれる",' );
 				}
 				// 売上
