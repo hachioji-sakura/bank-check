@@ -593,6 +593,7 @@ if ($i>$mlength) { continue; }
 if ($i!=$mlength) {
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>入金</th>";
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>未払金</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>前月請求-未払金</th>";
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上</th>";
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上外請求追加</th>";
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>請求</th>";
@@ -652,6 +653,7 @@ if ($i>$mlength) { continue; }
 if ($i!=$mlength) {
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>入金</th>";
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>未払金</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>前月請求-未払金</th>";
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上</th>";
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上外請求追加</th>";
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>請求</th>";
@@ -785,6 +787,7 @@ foreach (array_reverse($student_list2) as $item) {
 			if ($fc>0 && $match_off)	$off_flag[$i]=($item["last_total_price1"][$i]+$item["furikomi1"][$i-1]==0)?1:0;
 			// 未払い
 			if($fc>0) { echo "<td $name_mibarai width=80 align=right bgcolor=#ffdddd $rowspan>".number_format($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i])."</td>"; }
+			if($fc>0) { echo "<td $name_mibarai width=80 align=right $rowspan>".number_format($item["furikomi"][$i]-($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i]))."</td>"; }
 			// 売上
 			echo "<td width=80 align=right bgcolor=#ddddff>".($off_flag[$i]?'':number_format($item["seikyu_total0"][$i]-$item["seikyu_total0"][$i+1]))."</td>";
 			// 売上外請求追加
@@ -940,6 +943,7 @@ foreach (array_reverse($student_list2) as $item) {
 			if($fc>0) { echo "<td $name_mibarai width=80 align=right bgcolor=#ffdddd $rowspan>".number_format($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i]).
 //					"<br>{$item["seikyu_total"][$i+1]}-{$item["furikomi_total"][$i]}".
 					"</td>"; }
+			if($fc>0) { echo "<td $name_mibarai width=80 align=right $rowspan>".number_format($item["furikomi"][$i]-($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i]))."</td>"; }
 			// 売上
 			echo "<td width=80 align=right bgcolor=#ddddff>".($off_flag[$i]?'':number_format($item["seikyu_total0"][$i]-$item["seikyu_total0"][$i+1]))."</td>";
 			// 売上外請求追加
@@ -1095,6 +1099,7 @@ if ($i>$mlength) { continue; }
 if ($i!=$mlength) {
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>入金</th>";
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>未払金</th>";
+	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>前月請求-未払金</th>";
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上</th>";
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>売上外請求追加</th>";
 	echo "	<th width=80 >$year1[$i]/$month1[$i]<br>請求</th>";
