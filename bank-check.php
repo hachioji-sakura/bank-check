@@ -430,9 +430,9 @@ if (!$debug_member_no) {
 		else { if ($members) { $members = $item["no"].','.$members; } else { $members=$item["no"]; } continue; }
 		$mibarai = $item["seikyu_total"][1]-$item["furikomi_total"][0];
 		if ($mibarai>0) {
-			$sql = "INSERT INTO tbl_mibarai VALUES (?,?,?,?, now(), now())";
+			$sql = "INSERT INTO tbl_mibarai VALUES (?,?,?,?,?, now(), now())";
 			$stmt = $db->prepare($sql);
-			$stmt->execute(array($members, $year0, $month0, $mibarai));
+			$stmt->execute(array($members, $year0, $month0, $mibarai, $item["last_total_price"][1]));
 		}
 		$members = "";
 	}
@@ -787,7 +787,7 @@ foreach (array_reverse($student_list2) as $item) {
 			if ($fc>0 && $match_off)	$off_flag[$i]=($item["last_total_price1"][$i]+$item["furikomi1"][$i-1]==0)?1:0;
 			// 未払い
 			if($fc>0) { echo "<td $name_mibarai width=80 align=right bgcolor=#ffdddd $rowspan>".number_format($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i])."</td>"; }
-			if($fc>0) { echo "<td $name_mibarai width=80 align=right $rowspan>".number_format($item["furikomi"][$i]-($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i]))."</td>"; }
+			if($fc>0) { echo "<td $name_mibarai width=80 align=right $rowspan>".number_format($item["last_total_price"][$i+1]-($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i]))."</td>"; }
 			// 売上
 			echo "<td width=80 align=right bgcolor=#ddddff>".($off_flag[$i]?'':number_format($item["seikyu_total0"][$i]-$item["seikyu_total0"][$i+1]))."</td>";
 			// 売上外請求追加
@@ -943,7 +943,7 @@ foreach (array_reverse($student_list2) as $item) {
 			if($fc>0) { echo "<td $name_mibarai width=80 align=right bgcolor=#ffdddd $rowspan>".number_format($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i]).
 //					"<br>{$item["seikyu_total"][$i+1]}-{$item["furikomi_total"][$i]}".
 					"</td>"; }
-			if($fc>0) { echo "<td $name_mibarai width=80 align=right $rowspan>".number_format($item["furikomi"][$i]-($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i]))."</td>"; }
+			if($fc>0) { echo "<td $name_mibarai width=80 align=right $rowspan>".number_format($item["last_total_price"][$i+1]-($item["seikyu_total"][$i+1]-$item["furikomi_total"][$i+1]+$item["furikomi1"][$i]))."</td>"; }
 			// 売上
 			echo "<td width=80 align=right bgcolor=#ddddff>".($off_flag[$i]?'':number_format($item["seikyu_total0"][$i]-$item["seikyu_total0"][$i+1]))."</td>";
 			// 売上外請求追加
